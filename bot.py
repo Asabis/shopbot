@@ -290,7 +290,7 @@ def handle_add_item(call):
                           text=f'✨ Продукт "{escape_markdown(item)}" добавлен в список!', parse_mode="Markdown")
 
     # Display the updated shopping list
-    show_list(call.message)
+    show_list(call.message, user_id)
 
 # Handle deleting an item from the list
 @bot.callback_query_handler(func=lambda call: call.data.startswith('delete_'))
@@ -318,12 +318,13 @@ def delete_item(call):
     bot.answer_callback_query(call.id, "🗑️ Элемент удалён.")
 
     # Display the updated shopping list
-    show_list(call.message)
+    show_list(call.message, user_id)
 
 # Show the shopping list
 @bot.message_handler(func=lambda message: message.text == SHOPPING_LIST)
-def show_list(message):
-    user_id = message.from_user.id
+def show_list(message, user_id=None):
+    if user_id is None:
+        user_id = message.from_user.id
     group_id = get_group_id(user_id)
 
     # Fetch items from group's list

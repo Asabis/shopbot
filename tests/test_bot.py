@@ -2,11 +2,13 @@
 import unittest
 import sqlite3
 import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from unittest.mock import patch, MagicMock
 from telebot import types
 
-# Add the parent directory to sys.path to import bot.py
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from bot import execute_query, create_tables, get_group_id
 from bot import SHOPPING_LIST, CLEAR_LIST, SHARE_LIST, ABOUT_APP, MY_ID
 from bot import bot

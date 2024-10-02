@@ -390,10 +390,7 @@ def show_user_id(message):
     """Show the user's ID."""
     bot.send_message(message.chat.id, f"🆔 *Ваш ID*: `{message.from_user.id}`", parse_mode="Markdown", reply_markup=main_menu())
 
+# In the __main__ section, remove the bot.polling() call
 if __name__ == "__main__":
     create_tables()
-    try:
-        bot.polling()
-    except Exception as e:
-        logger.error(f"Unhandled exception: {e}")
-        sys.exit(1)
+    # The bot will be started from main.py

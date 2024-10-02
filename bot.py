@@ -13,9 +13,10 @@ logger = logging.getLogger(__name__)
 # Константы для кнопок и команд
 SHOPPING_LIST = "🛍️ Список покупок"
 CLEAR_LIST = "🗑️ Очистить список"
-SHARE_LIST = "🔗 Объединить списки"
-ABOUT_APP = "ℹ️ Информация о приложении"
-MY_ID = "👤 Мой ID"
+SHARE_LIST = "🔗 Поделиться списком"
+JOIN_LIST = "👥 Присоединиться к списку"
+ABOUT_APP = "ℹ️ О приложении"
+# Кнопка "Мой ID" удалена
 
 # Инициализация бота
 bot = telebot.TeleBot(API_TOKEN)
@@ -79,7 +80,6 @@ def escape_markdown(text):
     escape_chars = '_*[]()~`>#+-=|{}!'
     return ''.join(['\\' + char if char in escape_chars else char for char in text])
 
-
 # Главное меню клавиатуры
 def main_menu(has_items=True):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -87,7 +87,8 @@ def main_menu(has_items=True):
     if has_items:
         markup.add(CLEAR_LIST)
     markup.add(SHARE_LIST)
-    markup.add(MY_ID, ABOUT_APP)
+    markup.add(JOIN_LIST)
+    markup.add(ABOUT_APP)
     return markup
 
 # Обработчик команды /start
@@ -104,21 +105,22 @@ def start(message):
     # Получаем или создаем группу для пользователя
     group_id = get_or_create_group(user_id)
 
-    send_main_menu(message)
+    send_welcome_message(message)
 
-# Отправка главного меню
-def send_main_menu(message):
-    """Отправляет главное меню пользователю."""
+# Отправка приветственного сообщения и главного меню
+def send_welcome_message(message):
+    """Отправляет приветственное сообщение и главное меню пользователю."""
     description = (
-        "✨ *Привет!* Я ваш помощник для управления списком покупок!\n\n"
-        "Вы можете:\n"
-        "➕ *Добавлять продукты* в список.\n"
-        "📋 *Просматривать текущий список*.\n"
-        "🗑️ *Удалять ненужные элементы*.\n"
-        "🔗 *Объединять списки* с друзьями.\n"
-        "👤 *Узнать свой ID*.\n\n"
-        "Нажмите на кнопку ниже, чтобы начать:"
-    )
+        "👋 *Привет, {0}!* Добро пожаловать в *ShopBuddy* 🛍️\n\n"
+        "Я помогу вам управлять вашими списками покупок легко и удобно!\n\n"
+        "📌 *Что я умею?*\n"
+        "• Добавлять товары в список 📝\n"
+        "• Показывать ваш список покупок 📋\n"
+        "• Удалять товары из списка ❌\n"
+        "• Объединять списки с друзьями 🤝\n\n"
+        "Нажмите на кнопку ниже, чтобы начать 👇"
+    ).format(escape_markdown(message.from_user.first_name or "друг"))
+
     bot.send_message(message.chat.id, description, reply_markup=main_menu(), parse_mode="Markdown")
 
 # Получение или создание группы для пользователя
@@ -165,16 +167,16 @@ def notify_group_users(group_id, message_text, actor_id):
     else:
         logger.error(f"Пользователи не найдены в группе {group_id}")
 
-# Обработка объединения списков
+# Обработка объединения списков (создание кода для обмена)
 @bot.message_handler(func=lambda message: message.text == SHARE_LIST)
 def share_list(message):
-    """Предлагает пользователю объединить список с другим пользователем."""
+    """Предлагает пользователю поделиться списком с другим пользователем."""
     share_code = generate_share_code(message.from_user.id)
     bot.send_message(message.chat.id,
-                     f"🤝 *Ваш код для объединения списка*: `{share_code}`\n\n"
+                     f"🔗 *Ваш код для совместного списка*: `{share_code}`\n\n"
                      "Отправьте этот код другу, чтобы он мог присоединиться к вашему списку.",
                      parse_mode="Markdown")
-    bot.send_message(message.chat.id, "👥 *Когда ваш друг будет готов, пусть отправит боту команду /join* и введет код.", parse_mode="Markdown")
+    bot.send_message(message.chat.id, "Когда ваш друг будет готов, пусть нажмет кнопку *\"Присоединиться к списку\"* и введет код.", parse_mode="Markdown")
 
 # Генерация кода для объединения списков
 def generate_share_code(user_id):
@@ -183,10 +185,11 @@ def generate_share_code(user_id):
     execute_query("UPDATE groups SET share_code = ? WHERE group_id = ?", (share_code, group_id))
     return share_code
 
-# Обработчик команды /join
-@bot.message_handler(commands=['join'])
-def join_group(message):
-    bot.send_message(message.chat.id, "🔑 *Пожалуйста, введите код для присоединения к списку:*", parse_mode="Markdown")
+# Обработка присоединения к списку
+@bot.message_handler(func=lambda message: message.text == JOIN_LIST)
+def join_list(message):
+    """Обрабатывает присоединение к существующему списку по коду."""
+    bot.send_message(message.chat.id, "🔑 *Введите код для присоединения к списку:*", parse_mode="Markdown")
     bot.register_next_step_handler(message, process_join_code)
 
 def process_join_code(message):
@@ -202,16 +205,16 @@ def process_join_code(message):
             execute_query("DELETE FROM user_groups WHERE user_id = ?", (user_id,))
             # Добавляем в новую группу
             execute_query("INSERT INTO user_groups (user_id, group_id) VALUES (?, ?)", (user_id, group_id))
-            bot.send_message(message.chat.id, "✅ *Вы успешно присоединились к списку!*", reply_markup=main_menu(), parse_mode="Markdown")
+            bot.send_message(message.chat.id, "🎉 *Вы успешно присоединились к списку!*", reply_markup=main_menu(), parse_mode="Markdown")
             # Уведомляем других участников группы
-            notify_group_users(group_id, f'👤 *{escape_markdown(message.from_user.first_name)} присоединился к вашему списку!*', user_id)
+            notify_group_users(group_id, f'👥 *{escape_markdown(message.from_user.first_name)} присоединился к вашему списку!*', user_id)
         else:
             bot.send_message(message.chat.id, "ℹ️ *Вы уже состоите в этом списке.*", reply_markup=main_menu(), parse_mode="Markdown")
     else:
-        bot.send_message(message.chat.id, "❌ *Неверный код. Пожалуйста, попробуйте еще раз.*", reply_markup=main_menu(), parse_mode="Markdown")
+        bot.send_message(message.chat.id, "❌ *Неверный код. Пожалуйста, проверьте код и попробуйте снова.*", reply_markup=main_menu(), parse_mode="Markdown")
 
 # Обработка добавления элементов по тексту
-@bot.message_handler(func=lambda message: message.text not in [SHOPPING_LIST, CLEAR_LIST, SHARE_LIST, ABOUT_APP, MY_ID])
+@bot.message_handler(func=lambda message: message.text not in [SHOPPING_LIST, CLEAR_LIST, SHARE_LIST, JOIN_LIST, ABOUT_APP])
 def ask_to_add(message):
     """Спрашивает пользователя, хочет ли он добавить товар в список."""
     item = message.text.strip()
@@ -221,9 +224,9 @@ def ask_to_add(message):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton(text="✅ Да", callback_data=f"add_yes"))
         markup.add(types.InlineKeyboardButton(text="❌ Нет", callback_data="cancel"))
-        bot.send_message(message.chat.id, f'🤔 *Добавить* "{escape_markdown(item)}" *в список покупок?*', reply_markup=markup, parse_mode="Markdown")
+        bot.send_message(message.chat.id, f'➕ *Добавить* "{escape_markdown(item)}" *в список покупок?*', reply_markup=markup, parse_mode="Markdown")
     else:
-        bot.send_message(message.chat.id, "❌ Пожалуйста, введите корректное название продукта.", reply_markup=main_menu())
+        bot.send_message(message.chat.id, "⚠️ *Пожалуйста, введите название продукта.*", reply_markup=main_menu())
 
 # Обработка подтверждения добавления элемента
 @bot.callback_query_handler(func=lambda call: call.data in ['add_yes', 'cancel'])
@@ -232,7 +235,7 @@ def handle_add_item(call):
     user_id = call.from_user.id
     if call.data == 'cancel':
         user_temp_items.pop(user_id, None)
-        bot.answer_callback_query(call.id, "🚫 Операция отменена.")
+        bot.answer_callback_query(call.id, "🚫 Отмена добавления.")
         send_main_menu(call.message)
         return
 
@@ -249,11 +252,11 @@ def handle_add_item(call):
     execute_query("INSERT OR IGNORE INTO lists (group_id, item) VALUES (?, ?)", (group_id, item))
 
     # Уведомляем участников группы
-    notify_group_users(group_id, f'🔔 *"{escape_markdown(item)}" был добавлен в список!*', user_id)
+    notify_group_users(group_id, f'🛒 *"{escape_markdown(item)}"* добавлен в список покупок!', user_id)
 
-    bot.answer_callback_query(call.id, f'✅ Продукт "{item}" добавлен в список.')
+    bot.answer_callback_query(call.id, f'✅ "{item}" добавлен в список.')
     bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                          text=f'✨ Продукт "{escape_markdown(item)}" добавлен в список!', parse_mode="Markdown")
+                          text=f'✅ *"{escape_markdown(item)}"* успешно добавлен в ваш список!', parse_mode="Markdown")
 
     # Отображаем обновленный список покупок
     show_list(call.message, user_id)
@@ -279,9 +282,9 @@ def delete_item(call):
     execute_query("DELETE FROM lists WHERE item_id = ? AND group_id = ?", (item_id, group_id))
 
     # Уведомляем участников группы
-    notify_group_users(group_id, f'🔔 *"{escape_markdown(item)}" был удалён из списка!*', user_id)
+    notify_group_users(group_id, f'🗑️ *"{escape_markdown(item)}"* удален из списка покупок.', user_id)
 
-    bot.answer_callback_query(call.id, "🗑️ Элемент удалён.")
+    bot.answer_callback_query(call.id, "🗑️ Элемент удален.")
 
     # Отображаем обновленный список покупок
     show_list(call.message, user_id)
@@ -316,16 +319,16 @@ def show_list(message, user_id=None):
         bot.send_message(message.chat.id, "🛒 *Ваш список покупок пуст.*\n\nДобавьте товары, отправив их названия сообщением.", parse_mode="Markdown")
 
     # Отображаем главное меню
-    bot.send_message(message.chat.id, "👇 *Выберите действие из меню ниже:*", reply_markup=main_menu(has_items=bool(items)), parse_mode="Markdown")
+    bot.send_message(message.chat.id, "🔖 *Выберите действие из меню ниже или добавьте новый товар:*", reply_markup=main_menu(has_items=bool(items)), parse_mode="Markdown")
 
 # Подтверждение очистки списка
 @bot.message_handler(func=lambda message: message.text == CLEAR_LIST)
 def confirm_clear_list(message):
     """Запрашивает подтверждение перед очисткой списка."""
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("✅ Да", callback_data="confirm_clear"))
-    markup.add(types.InlineKeyboardButton("❌ Нет", callback_data="cancel"))
-    bot.send_message(message.chat.id, "🗑️ *Вы уверены, что хотите очистить список?*", reply_markup=markup, parse_mode="Markdown")
+    markup.add(types.InlineKeyboardButton("✅ Да, очистить", callback_data="confirm_clear"))
+    markup.add(types.InlineKeyboardButton("❌ Отмена", callback_data="cancel"))
+    bot.send_message(message.chat.id, "🗑️ *Вы уверены, что хотите очистить весь список?*", reply_markup=markup, parse_mode="Markdown")
 
 @bot.callback_query_handler(func=lambda call: call.data == 'confirm_clear')
 def clear_list(call):
@@ -338,7 +341,7 @@ def clear_list(call):
     # Очищаем список группы
     execute_query("DELETE FROM lists WHERE group_id = ?", (group_id,))
     bot.answer_callback_query(call.id, "🗑️ Список очищен.")
-    bot.send_message(call.message.chat.id, "🗑️ *Список покупок очищен.*", reply_markup=main_menu(has_items=False), parse_mode="Markdown")
+    bot.send_message(call.message.chat.id, "🗑️ *Ваш список покупок был очищен.*", reply_markup=main_menu(has_items=False), parse_mode="Markdown")
 
     # Уведомляем участников группы
     notify_group_users(group_id, f'🗑️ *Список покупок был очищен!*', user_id)
@@ -346,7 +349,7 @@ def clear_list(call):
 # Отмена действия
 @bot.callback_query_handler(func=lambda call: call.data == 'cancel')
 def cancel_action(call):
-    bot.answer_callback_query(call.id, "🚫 Действие отменено.")
+    bot.answer_callback_query(call.id, "🔙 Действие отменено.")
     send_main_menu(call.message)
 
 # Информация о приложении
@@ -355,21 +358,16 @@ def about_app(message):
     """Предоставляет информацию о приложении."""
     bot.send_message(
         message.chat.id,
-        "👋 *Добро пожаловать!*\n\n"
-        "Я - ваш персональный бот для управления списками покупок. С помощью меня вы можете:\n\n"
-        "🔹 Добавлять товары в список.\n"
-        "🔹 Удалять товары из списка.\n"
-        "🔹 Объединять списки с друзьями и родственниками.\n\n"
-        "Просто отправьте название товара, и я помогу вам его добавить!",
+        "ℹ️ *О приложении*\n\n"
+        "🤖 *ShopBuddy* - ваш надежный помощник в управлении списками покупок!\n\n"
+        "С помощью меня вы можете:\n"
+        "• Легко добавлять товары в список.\n"
+        "• Удалять товары одним нажатием.\n"
+        "• Делиться списком с близкими и друзьями.\n\n"
+        "Просто начните вводить названия товаров, и я помогу вам их сохранить!",
         parse_mode="Markdown",
         reply_markup=main_menu()
     )
-
-# Показать ID пользователя
-@bot.message_handler(func=lambda message: message.text == MY_ID)
-def show_user_id(message):
-    """Показывает ID пользователя."""
-    bot.send_message(message.chat.id, f"🆔 *Ваш ID*: `{message.from_user.id}`", parse_mode="Markdown", reply_markup=main_menu())
 
 if __name__ == "__main__":
     create_tables()

@@ -1,3 +1,11 @@
-config.py
+#python
 __pycache__
+
+#config
+config.py
+
+#logs
 bot.log
+
+#Database
+*.db

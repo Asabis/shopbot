@@ -1,12 +1,10 @@
-# bot.py
-
 import logging
 import sqlite3
 import sys
 import telebot
 from telebot import types
 import uuid
-from config import API_TOKEN
+from config import API_TOKEN, DB_NAME
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -22,13 +20,10 @@ MY_ID = "👤 Мой ID"
 # Initialize bot
 bot = telebot.TeleBot(API_TOKEN)
 
-# Global dictionary to store items temporarily
-temp_items = {}
-
 # Helper function for database operations
-def execute_query(query, params=(), fetch=False, fetchone=False, lastrowid=False, db_name='database.db'):
+def execute_query(query, params=(), fetch=False, fetchone=False, lastrowid=False):
     try:
-        conn = sqlite3.connect(db_name)
+        conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
         cursor.execute(query, params)
         if lastrowid:
@@ -53,34 +48,34 @@ def execute_query(query, params=(), fetch=False, fetchone=False, lastrowid=False
         return None
 
 # Create necessary database tables
-def create_tables(db_name='database.db'):
+def create_tables():
     execute_query('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
             username TEXT,
             first_name TEXT
         )
-    ''', db_name=db_name)
+    ''')
     execute_query('''
         CREATE TABLE IF NOT EXISTS groups (
             group_id INTEGER PRIMARY KEY AUTOINCREMENT,
             group_name TEXT
         )
-    ''', db_name=db_name)
+    ''')
     execute_query('''
         CREATE TABLE IF NOT EXISTS user_groups (
             user_id INTEGER,
             group_id INTEGER,
             PRIMARY KEY (user_id, group_id)
         )
-    ''', db_name=db_name)
+    ''')
     execute_query('''
         CREATE TABLE IF NOT EXISTS lists (
             rowid INTEGER PRIMARY KEY AUTOINCREMENT,
             group_id INTEGER,
             item TEXT
         )
-    ''', db_name=db_name)
+    ''')
 
 # Escape markdown special characters
 def escape_markdown(text):
@@ -246,6 +241,9 @@ def merge_with_user(message):
     except ValueError:
         bot.send_message(message.chat.id, "❌ Пожалуйста, введите корректный ID.", reply_markup=main_menu())
 
+# Global dictionary to store items temporarily
+temp_items = {}
+
 # Handle adding items when user inputs text
 @bot.message_handler(func=lambda message: message.text not in [SHOPPING_LIST, CLEAR_LIST, SHARE_LIST, ABOUT_APP, MY_ID])
 def ask_to_add(message):
@@ -373,4 +371,28 @@ def clear_list(message):
 @bot.message_handler(func=lambda message: message.text == ABOUT_APP)
 def about_app(message):
     """Provide information about the app."""
-    bot
+    bot.send_message(
+        message.chat.id,
+        "👋 *Добро пожаловать!*\n\n"
+        "Я - ваш персональный бот для управления списками покупок. С помощью меня вы можете:\n\n"
+        "🔹 Добавлять товары в список.\n"
+        "🔹 Удалять товары из списка.\n"
+        "🔹 Объединять списки с друзьями и родственниками.\n\n"
+        "Просто отправьте название товара, и я помогу вам его добавить!",
+        parse_mode="Markdown",
+        reply_markup=main_menu()
+    )
+
+# Show user ID
+@bot.message_handler(func=lambda message: message.text == MY_ID)
+def show_user_id(message):
+    """Show the user's ID."""
+    bot.send_message(message.chat.id, f"🆔 *Ваш ID*: `{message.from_user.id}`", parse_mode="Markdown", reply_markup=main_menu())
+
+if __name__ == "__main__":
+    create_tables()
+    try:
+        bot.polling()
+    except Exception as e:
+        logger.error(f"Unhandled exception: {e}")
+        sys.exit(1)

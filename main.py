@@ -1,9 +1,5 @@
-# main.py
-
-
 def start_bot():
     print("Запуск бота...")
-    # Импортируем модуль бота и запускаем его
     import bot
 
     bot.create_tables()

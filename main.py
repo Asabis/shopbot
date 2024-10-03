@@ -1,6 +1,4 @@
 # main.py
-import sys
-import os
 
 
 def start_bot():
